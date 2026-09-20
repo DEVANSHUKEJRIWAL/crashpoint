@@ -1,0 +1,25 @@
+# Binaries and build output
+/crashpoint
+/bin/
+*.exe
+*.test
+*.out
+
+# Trial output and local state
+/crashpoint-out/
+/out/
+*.cpb
+*.db
+
+# Benchmark raw data is committed; local scratch is not
+/bench/scratch/
+
+# Go
+/vendor/
+go.work
+go.work.sum
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
