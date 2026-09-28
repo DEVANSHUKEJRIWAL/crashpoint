@@ -1,6 +1,6 @@
 # Risk Register and Cut Lines
 
-Crashpoint is built by one person, part time, in eight weeks, alongside an internship and coursework. This document exists so that falling behind triggers a planned cut rather than a panic.
+Crashpoint is built by one person, part time, in eight weeks, alongside a master's coursework load, at a target of **12 hours per week**. This document exists so that falling behind triggers a planned cut rather than a panic.
 
 ---
 
@@ -17,7 +17,7 @@ Crashpoint is built by one person, part time, in eight weeks, alongside an inter
 | R7 | Nobody adopts the tool | High | Low | Success is measured on artifacts you control (Section 4) | Not applicable; expected |
 | R8 | Docker orchestration consumes disproportionate time | Medium | Medium | Serial trials first; parallelism only if time remains | More than 3 days spent on the runner |
 | R9 | Benchmarks are unreproducible or embarrassing | Low | Medium | Methodology fixed before measuring; publish misses | Any published number that can't be reproduced on demand |
-| R10 | Internship or coursework load spikes | High | Medium | Cut lines; weekly milestones that each end in something demonstrable | Two consecutive weeks with fewer than 10 hours of project work |
+| R10 | Coursework load spikes (midterms, finals, project deadlines) | High | Medium | Cut lines; weekly milestones that each end in something demonstrable; bank hours before known deadline weeks | **Target: 12 h/week.** Two consecutive weeks below 7 hours |
 
 ---
 
