@@ -315,6 +315,7 @@ Used to measure detection rate. Bugs marked **real** are modelled on publicly re
 | Q6 | Refuse `hold` on shared connections? | No. Warn, record it in trial metadata, and attach the warning to findings. |
 
 ---
+**Status:** All six accepted on 2026-09-20. None of them constrain future extension: Q3 and Q5 are tunable values, Q1/Q2/Q6 add modes or warnings that later work can extend, and Q4 is a testing commitment. The decisions that do shape extensibility are the tier model (§3), the input-mode interface (§4), effects as an event stream, and faults as versioned data — all chosen so that new evidence sources, new fault types, and new effect sinks are additive.
 
 ## Changelog
 
