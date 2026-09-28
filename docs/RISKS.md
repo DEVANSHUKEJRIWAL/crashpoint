@@ -13,7 +13,7 @@ Crashpoint is built by one person, part time, in eight weeks, alongside an inter
 | R3 | Crash windows can't be hit reliably, so detection depends on luck | Medium | High | Speculative holding; measure `windows_hit / windows_armed` from Week 3 | Hit rate below 50% at Week 4 |
 | R4 | The proxy is unstable or protocol handling is wrong | Medium | High | Fuzz tests with the parser; end-to-end tests with two clients; golden-file encoding tests | Proxy not stable by end of Week 3 → fall back to a `kfake`-based harness |
 | R5 | No real-world bugs found in Week 8 | High | Medium | Reproduce a *known published* bug as a regression test instead; publish the honest result | Week 7 ends with no external target prepared |
-| R6 | Apache Kafka's own fault proxy (PR #23438) expands into a verification framework | Low | Medium | Track the JIRA; differentiate on the checker and shrinker, which it does not have | The PR grows an application-level oracle |
+| R6 | Apache Kafka's own fault proxy (PR #23438, merged) expands into a verification framework | Low | Medium | Track KAFKA-21074 and its follow-ups; differentiate on the checker and shrinker, which it does not have | A follow-up adds an application-level oracle |
 | R7 | Nobody adopts the tool | High | Low | Success is measured on artifacts you control (Section 4) | Not applicable; expected |
 | R8 | Docker orchestration consumes disproportionate time | Medium | Medium | Serial trials first; parallelism only if time remains | More than 3 days spent on the runner |
 | R9 | Benchmarks are unreproducible or embarrassing | Low | Medium | Methodology fixed before measuring; publish misses | Any published number that can't be reproduced on demand |
@@ -61,7 +61,7 @@ Never cut: the checker, the shrinker, the control trials, or the benchmark metho
 | Published benchmark methodology and raw data | Yes | Yes |
 | Hold-and-kill measurably beats random kill | Yes | Mostly |
 | A 3-minute demo a stranger understands | Yes | Yes |
-| One substantive technical comment on Kafka PR #23438 | Yes | Yes |
+| One substantive technical contribution to the Kafka fault-proxy follow-ups (a JIRA comment, a review of the multi-broker follow-up PR, or a small patch) | Yes | Yes |
 | Maintainer-confirmed bug in a third-party project | Nice to have | No |
 | GitHub stars | Ignore below 100 | No |
 

@@ -61,7 +61,7 @@ The SUT is the distributed system; the tool deliberately is not. Distribution ap
 **Responsibility:** forward all Kafka traffic transparently, record protocol events, and execute proxy-level faults.
 
 - **Listeners:** one bootstrap listener plus one listener per broker node, created when the node first appears in a response.
-- **Address rewriting:** Metadata, FindCoordinator, and DescribeCluster responses are rewritten so clients only ever learn proxy addresses. Without this, clients bypass the proxy after bootstrapping.
+- **Address rewriting:** Metadata, FindCoordinator, and DescribeCluster responses are rewritten so clients only ever learn proxy addresses. Without this, clients bypass the proxy after bootstrapping. Each broker node gets **its own listener**, so multi-broker clusters route correctly. (Apache Kafka's fault proxy rewrites every broker to a single port, which only works against one broker.)
 - **Correlation tracking:** response headers carry only a correlation ID. The proxy keeps a per-connection map from correlation ID to (API key, version), registered before forwarding each request. Produce requests with `acks=0` get no response and must not be registered.
 - **Header versions:** flexible API versions add tagged fields to headers. The ApiVersions response always uses the old header format.
 - **Fast path:** frames for APIs Crashpoint doesn't inspect are forwarded without decoding their bodies.
@@ -302,6 +302,8 @@ The reference SUT is a **separate Go module** so its dependencies (database driv
 | CDC slot breaks or lags past a limit | `harness_error` (history incomplete) |
 | Recorder buffer overflows | `harness_error` |
 | Held-frame memory budget exceeded | `harness_error` |
+| A targeted frame can't be decoded or re-encoded | `harness_error` (fail closed; never forward the original and pretend the fault applied) |
+| An armed fault never fired | `NOT_EXERCISED`, never `PASS` |
 | Unplanned proxy→broker latency spike | `NOISY`; excluded from statistics |
 | Trial runner dies | Container labels + lease let the reaper clean up; per-trial group names stop orphans from joining later trials |
 | SUT database unavailable (not injected) | Recorded as observed SUT behavior; `harness_error` only if CDC is affected |

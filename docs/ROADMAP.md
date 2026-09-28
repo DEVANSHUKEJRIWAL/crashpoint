@@ -104,7 +104,7 @@ The **Minimum Impressive Product** (RISKS.md Section 2) must exist by Week 6. Ev
 - [ ] Someone who has never seen the project completes the quickstart unaided
 - [ ] Any third-party issue found is reported privately to maintainers first
 - [ ] All benchmark tables filled with measured values or documented misses
-- [ ] One substantive technical comment posted on Apache Kafka PR #23438, informed by your own data
+- [ ] One substantive technical contribution to KAFKA-21074's follow-ups (the PR itself is merged), informed by your own data: for example, multi-broker support via one listener per node, which Crashpoint already implements
 
 ---
 

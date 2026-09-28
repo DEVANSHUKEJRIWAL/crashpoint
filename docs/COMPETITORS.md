@@ -43,7 +43,9 @@ Fault **injection** for Kafka is commoditized: several tools do it, including Ap
 
 **"Why not Conduktor?"** It injects but doesn't judge. It's also commercial, and its faults are rate-based rather than placed at a specific protocol moment.
 
-**"Why not use Kafka's own fault proxy?"** It's Java test infrastructure inside the Kafka repository for Kafka's own tests, with no history recorder, no oracle, and no shrinking. Its existence validates the fault-injection design; it doesn't cover the part that matters here. (Its author reached the same conclusion about deterministic triggers: they are safe to assert on, while probabilistic ones are chaos mode only.)
+**"Why not use Kafka's own fault proxy?"** It's Java test infrastructure inside the Kafka repository for Kafka's own tests, with no history recorder, no oracle, and no shrinking. It is also *complementary* rather than competing: most of its error-injection targets are transactional APIs (EndTxn, TxnOffsetCommit, InitProducerId), exactly the exactly-once territory Crashpoint refuses (ADR-0008). Kafka is testing its own EOS machinery; Crashpoint tests non-transactional applications against their database effects.
+
+Its review history also carries a lesson Crashpoint adopts directly: a reviewer found that rule counters could report a fault as fired when it hadn't, which silently broke the tests' "the fault actually fired" check, and that one example test's assertion could pass *before* its fault ever triggered. Hence Crashpoint's `NOT_EXERCISED` verdict and its rule that faults count only when actually applied (DESIGN.md 7.2, 10).
 
 **"Why not kfake?"** It's a fake broker for Go unit tests. Coordinator semantics are exactly what must be real here. It remains useful for testing Crashpoint itself.
 

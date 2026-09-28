@@ -24,14 +24,14 @@ One working day, seven blocks. Tick each box. Where a block says "write," the wr
 
 <https://github.com/apache/kafka/pull/23438>
 
-Kafka committers are building a wire-protocol fault-injection proxy with deterministic triggers: `injectError`, `disconnectOn` (which models the exactly-once "commit gap"), `delayOn`, `blackholeClient`. Read the description, the file changes, and every review comment.
+Kafka committers built (and merged in September 2026) a wire-protocol fault-injection proxy with deterministic triggers: `injectError`, `disconnectOn` (which models the exactly-once "commit gap"), `delayOn`, `blackholeClient`. Read the description, the file changes, and every review comment.
 
 Write (about 400 words total):
 
 - [ ] **Three design choices they made that differ from `ARCHITECTURE.md`**, and for each, whether theirs is better and why
 - [ ] **How they handle connection lifecycle when a test fails** (a reviewer raises this) and what Crashpoint's equivalent is
 - [ ] **Why they separate deterministic triggers from probabilistic ones**, and where that distinction appears in `DESIGN.md`
-- [ ] **One question worth asking on that PR** once you have your own measurements. Save it; don't post yet.
+- [ ] **One question or contribution for the follow-ups** (JIRA KAFKA-21074, or the announced multi-broker follow-up PR) once you have your own measurements. Save it; don't post yet.
 
 **Why this matters:** this is your design review. It's also the single best interview line available to you: *"While designing mine, Kafka committers published a proxy with the same primitives; here's where our designs differ and why."*
 

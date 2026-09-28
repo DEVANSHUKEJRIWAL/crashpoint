@@ -1,6 +1,6 @@
 # Crashpoint Design: The Correctness Contract
 
-**Version:** 0.2 · **Status:** Accepted for implementation · **Owner:** Devanshu Kejriwal
+**Version:** 0.3 · **Status:** Accepted for implementation · **Owner:** Devanshu Kejriwal
 
 This document defines precisely what Crashpoint checks, under which assumptions, and what it cannot detect. The checker implementation must follow these definitions exactly. If the code and this document disagree, the document is fixed first, then the code.
 
@@ -151,7 +151,8 @@ The checker must depend only on the `Input` interface, never on the fact that Cr
 3. Wait until **both**: committed offsets equal the high-water mark for every input partition, and the CDC reader has caught up to the database's current WAL position.
 4. **Progress rule.** The wait extends while committed offsets or effects keep advancing, up to a hard cap (default: 30 s base, 120 s cap). If progress stalls for 30 s without completing, record an **I6 violation**. If the hard cap is reached while still progressing, record `HARNESS_ERROR: quiescence cap reached`, because a slow environment is not an application bug.
 5. When I6 fires, skip I1 and I7: loss checks would be unreliable.
-6. Run the checker.
+6. Confirm that every armed fault either fired or was explicitly released as a missed window. A trial must never be checked while a fault is still pending; otherwise it can pass before the fault ever had a chance to act.
+7. Run the checker.
 
 ---
 
@@ -163,6 +164,7 @@ The checker must depend only on the `Input` interface, never on the fact that Cr
 |---|---|---|---|
 | `kill` (SIGKILL) | Process | Crash, OOM kill, node loss | v1 |
 | `pause` / `unpause` (cgroup freeze) | Process | Long GC pause, VM stall, CPU starvation | v1 |
+| `blackhole` / `unblackhole` a member's Kafka traffic | Proxy | Network partition between one instance and Kafka while its database stays reachable: the process keeps running and writing while the group evicts it (the most realistic zombie generator) | v1 |
 | `hold` request until trigger | Proxy | Precise placement of a crash relative to a request | v1 |
 | `drop_response` | Proxy | Lost acknowledgement: the broker applied it, the client never learns | v1 |
 | `stop` (SIGTERM) | Process | Rolling deploy | v1 |
@@ -189,6 +191,10 @@ The hold budget is a deliberate perturbation of the SUT and is reported with eve
 **Roles.** Members in plans are roles (`$m` = "whoever owns partition 3"), bound at run time, so plans replay when member IDs change.
 
 **Harness safety.** Every connection is classified at accept time as `sut` or `harness`. Faults may target only `sut` connections; a test asserts that Crashpoint never faults its own workload connections.
+
+**Fault accounting.** A fault counts as fired only at the moment it is actually applied to a frame or process, never when its rule is merely evaluated. When several rules could match one event, exactly one acts, and only its counter advances. (Apache Kafka's fault proxy shipped with a version of this bug caught in review, where rules reported firing without acting, which silently broke the tests that relied on "the fault fired" as evidence.)
+
+**Fail closed.** If the proxy cannot apply a fault to a frame it targets (a decode or re-encode failure), the trial ends as `HARNESS_ERROR`. Forwarding the original bytes instead would let the trial pass with the fault silently skipped.
 
 ### 7.3 Unrealistic faults (must NOT be injected)
 
@@ -244,6 +250,7 @@ Targeted enumeration beats random search when the target windows are known in ad
 | `HARNESS_ERROR` | Crashpoint failed or lost data: proxy crash, CDC failure, recorder overflow, held-frame budget exceeded, quiescence cap reached. Never a bug report. |
 | `NOISY` | Unplanned proxy↔broker latency exceeded a threshold. Excluded from detection statistics. |
 | `UNSUPPORTED` | A refusal condition from Section 8. |
+| `NOT_EXERCISED` | No armed fault actually fired. The SUT behaved correctly, but under no fault — this is not evidence of correctness and is never counted as a pass. |
 
 Every violation report carries the invariant, the affected inputs, and the minimal history slice explaining it: ownership intervals, deliveries, commits, effects, and faults for the affected partitions.
 
@@ -307,4 +314,5 @@ Used to measure detection rate. Bugs marked **real** are modelled on publicly re
 | Version | Date | Change |
 |---|---|---|
 | 0.1 | _(date)_ | Initial draft |
+| 0.3 | _(date)_ | Lessons from Apache Kafka's fault proxy review: `NOT_EXERCISED` verdict, fault accounting at application time, fail-closed on transform errors, pending-fault check before quiescence ends, `blackhole` fault promoted to v1 |
 | 0.2 | _(date)_ | Instrumentation tiers (T0–T3) and I7 state convergence; input modes and identity extraction; refusal conditions; speculative holding; harness connection safety; I3 transaction tie-break; `expect_effect`; quiescence progress rule; "Why this finds bugs"; corpus bugs derived from real reports plus a held-out bug; open questions decided |

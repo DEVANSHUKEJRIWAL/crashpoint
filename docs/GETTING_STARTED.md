@@ -56,7 +56,7 @@ crashpoint/
 
 ## Step 2: Read Apache Kafka PR #23438 (1 hour)
 
-[apache/kafka#23438](https://github.com/apache/kafka/pull/23438) adds a Kafka wire-protocol fault-injection proxy as a test fixture: `injectError`, `disconnectOn` (which models the exactly-once "commit gap"), `delayOn`, `blackholeClient`, and a deterministic trigger DSL.
+[apache/kafka#23438](https://github.com/apache/kafka/pull/23438) (merged September 2026) adds a Kafka wire-protocol fault-injection proxy as a test fixture: `injectError`, `disconnectOn` (which models the exactly-once "commit gap"), `delayOn`, `blackholeClient`, and a deterministic trigger DSL.
 
 This is the closest thing to a free design review you will get: Kafka committers converging on the same primitive you planned. Read the description and the review comments, then write in `JOURNAL.md`:
 
@@ -64,7 +64,7 @@ This is the closest thing to a free design review you will get: Kafka committers
 2. How they handle connection lifecycle when a test fails (a reviewer raises this) and what your equivalent is.
 3. One question you could ask about the PR that shows you actually read it.
 
-That third item is worth an actual comment on the PR later in the project, once you have data from your own implementation. It is a better networking move than any post.
+The PR is merged, so that question belongs on the JIRA ticket (KAFKA-21074) or on the follow-up PR the author announced for multi-broker bootstraps. Save it for when you have data from your own implementation; it is a better networking move than any post.
 
 ---
 
