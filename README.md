@@ -17,6 +17,8 @@ Most Kafka consumers claim to be "at-least-once and idempotent." Few teams have 
 
 These bugs rarely appear in integration tests. In production they surface as incidents nobody can reproduce: "a customer was charged twice last Tuesday."
 
+People already did this by hand. One recent report of silent message loss in a Kafka client was proved by patching the client with tracing, running five reproductions, and manually diffing delivered offsets against committed offsets. Crashpoint automates that loop.
+
 ## What Crashpoint will do
 
 1. Sit between your consumers and Kafka as a **transparent wire-protocol proxy**; only `bootstrap.servers` changes.

@@ -1,6 +1,6 @@
 # Crashpoint Design: The Correctness Contract
 
-**Version:** 0.3 · **Status:** Accepted for implementation · **Owner:** Devanshu Kejriwal
+**Version:** 0.4 · **Status:** Accepted for implementation · **Owner:** Devanshu Kejriwal
 
 This document defines precisely what Crashpoint checks, under which assumptions, and what it cannot detect. The checker implementation must follow these definitions exactly. If the code and this document disagree, the document is fixed first, then the code.
 
@@ -80,6 +80,10 @@ Crashpoint produces the inputs and records each one's status, partition, and off
 The SUT's own producer sends traffic through the proxy. Crashpoint extracts each input's identity from the observed Produce request using a configured **identity extractor**: a record header name, or a JSON path into the value. The proxy already sees produce responses, so it learns the assigned partitions and offsets with no extra machinery.
 
 The checker must depend only on the `Input` interface, never on the fact that Crashpoint produced the data.
+
+### Processing time is a workload dimension, not a fault
+
+How long the SUT takes per record decides which bugs are reachable, so it is configured per trial (`work_delay`) and varied by the explorer, independently of faults. At least one scenario must run the handler slower than the consumer's poll interval with **no faults armed**: client libraries have lost records in exactly that situation, with no crash, rebalance, or broker involvement (corpus bug 8).
 
 ### Input status handling
 
@@ -250,7 +254,9 @@ Targeted enumeration beats random search when the target windows are known in ad
 | `HARNESS_ERROR` | Crashpoint failed or lost data: proxy crash, CDC failure, recorder overflow, held-frame budget exceeded, quiescence cap reached. Never a bug report. |
 | `NOISY` | Unplanned proxy↔broker latency exceeded a threshold. Excluded from detection statistics. |
 | `UNSUPPORTED` | A refusal condition from Section 8. |
-| `NOT_EXERCISED` | No armed fault actually fired. The SUT behaved correctly, but under no fault — this is not evidence of correctness and is never counted as a pass. |
+| `NOT_EXERCISED` | No armed fault actually fired **and no invariant was broken**. Not evidence of correctness, and never counted as a pass. |
+
+**Verdict precedence.** A violation is always reported, whatever the faults did. Some real bugs need no fault at all (see corpus bug 8): if an invariant breaks while every armed fault missed its window, the verdict is `VIOLATION`, never `NOT_EXERCISED`.
 
 Every violation report carries the invariant, the affected inputs, and the minimal history slice explaining it: ownership intervals, deliveries, commits, effects, and faults for the affected partitions.
 
@@ -268,7 +274,8 @@ Used to measure detection rate. Bugs marked **real** are modelled on publicly re
 | 4 | Dedup check and effect in separate transactions | Common footgun | `pause` past session timeout | I2 + concurrent ownership (I4 at T3) |
 | 5 | Parallel workers commit the highest completed offset, not the contiguous prefix | **Real** (classic parallel-consumer hazard) | `kill` while an earlier offset is in flight | I1 |
 | 6 | Retry topic that ignores per-key ordering | **Real** (retry-topic pattern) | `inject_error`, then recovery | I3 |
-| 7 | Revoke callback commits stale cached offsets | **Real** (modelled on confluent-kafka-javascript issue #404: pause during shutdown with auto-commit leaves stale committed offsets and causes reprocessing) | `stop` during a rebalance | I2 |
+| 7 | Off-by-one on the seek/commit after an internal cache reset: seeks to the last consumed offset instead of that offset plus one | **Real** (confluent-kafka-javascript [#417](https://github.com/confluentinc/confluent-kafka-javascript/issues/417), maintainer-confirmed) | `stop` during a rebalance, or a slow handler that trips cache expiration | I2 — exactly one duplicate per occurrence, which is a sensitivity test for the checker |
+| 8 | Slow handler: cache expiration discards fetched-but-undelivered records, the rewind is skipped, and auto-commit advances past them | **Real** (confluent-kafka-javascript [#528](https://github.com/confluentinc/confluent-kafka-javascript/issues/528): 118 of 200 records committed but never delivered) | **No fault.** Handler slower than the poll interval | I1 and I7; I5 warns that commits ran ahead of effects |
 | H | Held-out bug, written after the checker | — | — | Unknown to the detector |
 | C | **Control:** dedup marker and effect in one transaction, commit after, rebalance blocked during processing | — | All faults | **Never a violation** |
 
@@ -314,5 +321,6 @@ Used to measure detection rate. Bugs marked **real** are modelled on publicly re
 | Version | Date | Change |
 |---|---|---|
 | 0.1 | _(date)_ | Initial draft |
+| 0.4 | _(date)_ | Verdict precedence (a violation always outranks `NOT_EXERCISED`); processing time as a workload dimension; corpus bugs 7 and 8 re-grounded in confluent-kafka-javascript #417 and #528 |
 | 0.3 | _(date)_ | Lessons from Apache Kafka's fault proxy review: `NOT_EXERCISED` verdict, fault accounting at application time, fail-closed on transform errors, pending-fault check before quiescence ends, `blackhole` fault promoted to v1 |
 | 0.2 | _(date)_ | Instrumentation tiers (T0–T3) and I7 state convergence; input modes and identity extraction; refusal conditions; speculative holding; harness connection safety; I3 transaction tie-break; `expect_effect`; quiescence progress rule; "Why this finds bugs"; corpus bugs derived from real reports plus a held-out bug; open questions decided |
