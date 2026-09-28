@@ -1,6 +1,6 @@
 # ADR-0007: Hold offset commits speculatively to hit crash windows
 
-**Status:** Accepted · **Date:** _(date)_
+**Status:** Accepted · **Date:** 2026-09-20
 
 ## Context
 

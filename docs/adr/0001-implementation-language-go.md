@@ -1,6 +1,6 @@
 # ADR-0001: Implement Crashpoint in Go
 
-**Status:** Proposed · **Date:** _(date)_
+**Status:** Accepted · **Date:** 2026-09-20
 
 ## Context
 

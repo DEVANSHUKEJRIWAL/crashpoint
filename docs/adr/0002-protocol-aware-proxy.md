@@ -1,6 +1,6 @@
 # ADR-0002: Build a protocol-aware Kafka proxy instead of reusing a generic or existing proxy
 
-**Status:** Proposed · **Date:** _(date)_
+**Status:** Accepted · **Date:** 2026-09-20
 
 ## Context
 

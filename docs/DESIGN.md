@@ -321,7 +321,7 @@ Used to measure detection rate. Bugs marked **real** are modelled on publicly re
 
 | Version | Date | Change |
 |---|---|---|
-| 0.1 | _(date)_ | Initial draft |
-| 0.4 | _(date)_ | Verdict precedence (a violation always outranks `NOT_EXERCISED`); processing time as a workload dimension; corpus bugs 7 and 8 re-grounded in confluent-kafka-javascript #417 and #528 |
-| 0.3 | _(date)_ | Lessons from Apache Kafka's fault proxy review: `NOT_EXERCISED` verdict, fault accounting at application time, fail-closed on transform errors, pending-fault check before quiescence ends, `blackhole` fault promoted to v1 |
-| 0.2 | _(date)_ | Instrumentation tiers (T0–T3) and I7 state convergence; input modes and identity extraction; refusal conditions; speculative holding; harness connection safety; I3 transaction tie-break; `expect_effect`; quiescence progress rule; "Why this finds bugs"; corpus bugs derived from real reports plus a held-out bug; open questions decided |
+| 0.1 | 2026-09-20 | Initial draft |
+| 0.4 | 2026-09-20 | Verdict precedence (a violation always outranks `NOT_EXERCISED`); processing time as a workload dimension; corpus bugs 7 and 8 re-grounded in confluent-kafka-javascript #417 and #528 |
+| 0.3 | 2026-09-20 | Lessons from Apache Kafka's fault proxy review: `NOT_EXERCISED` verdict, fault accounting at application time, fail-closed on transform errors, pending-fault check before quiescence ends, `blackhole` fault promoted to v1 |
+| 0.2 | 2026-09-20 | Instrumentation tiers (T0–T3) and I7 state convergence; input modes and identity extraction; refusal conditions; speculative holding; harness connection safety; I3 transaction tie-break; `expect_effect`; quiescence progress rule; "Why this finds bugs"; corpus bugs derived from real reports plus a held-out bug; open questions decided |

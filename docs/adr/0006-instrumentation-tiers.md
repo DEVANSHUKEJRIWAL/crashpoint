@@ -1,6 +1,6 @@
 # ADR-0006: Tier the invariants by available instrumentation
 
-**Status:** Accepted · **Date:** _(date)_
+**Status:** Accepted · **Date:** 2026-09-20
 
 ## Context
 

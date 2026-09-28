@@ -1,6 +1,6 @@
 # ADR-0005: Ship a single binary with in-process components; don't use Kafka for Crashpoint's own events
 
-**Status:** Proposed · **Date:** _(date)_
+**Status:** Accepted · **Date:** 2026-09-20
 
 ## Context
 

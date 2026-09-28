@@ -1,6 +1,6 @@
 # ADR-0003: Run trials against real Kafka brokers; use kfake only for unit and end-to-end tests of Crashpoint itself
 
-**Status:** Proposed · **Date:** _(date)_
+**Status:** Accepted · **Date:** 2026-09-20
 
 ## Context
 

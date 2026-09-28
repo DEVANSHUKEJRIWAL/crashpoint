@@ -1,6 +1,6 @@
 # ADR-0008: Detect and refuse unsupported SUTs instead of reporting on them
 
-**Status:** Accepted · **Date:** _(date)_
+**Status:** Accepted · **Date:** 2026-09-20
 
 ## Context
 

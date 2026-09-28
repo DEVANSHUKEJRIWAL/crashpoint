@@ -63,7 +63,7 @@ Answer in your own words (see GETTING_STARTED.md, Step 2).
 
 ## Entries
 
-### _(date)_: Project started
+### 2026-09-20: Project started
 
 **Goal:** Create the repository and documentation skeleton.
 **Done:**

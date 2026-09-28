@@ -1,6 +1,6 @@
 # ADR-0004: Observe application effects through Postgres logical replication
 
-**Status:** Proposed · **Date:** _(date)_
+**Status:** Accepted · **Date:** 2026-09-20
 
 ## Context
 
