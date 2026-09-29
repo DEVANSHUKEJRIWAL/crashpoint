@@ -56,6 +56,25 @@ services:
           --partitions 6 \
           --replication-factor 1
 
+  # Reference payments consumer, control mode (issue #2).
+  # Scale to see a rebalance: docker compose up --scale payments-consumer=3
+  # Instance id defaults to the container hostname (unique per replica), so
+  # writer_id is distinct — that is what enables T3 zombie-write attribution.
+  payments-consumer:
+    build: ./sut
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      KAFKA_BROKERS: kafka:29092
+      KAFKA_TOPIC: payments.requested
+      KAFKA_GROUP: payments
+      POSTGRES_DSN: postgres://crashpoint:crashpoint@postgres:5432/crashpoint
+
   postgres:
     image: postgres:17
     container_name: crashpoint-postgres

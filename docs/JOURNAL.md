@@ -70,3 +70,13 @@ Answer in your own words (see GETTING_STARTED.md, Step 2).
 **Surprise / learned:**
 **Decision:**
 **Open question:**
+
+### 2026-09-28: Control-mode payments consumer (issue #2)
+
+**Goal:** The correct, idempotent consumer (corpus row C) the checker must always pass.
+**Done:** `sut/` as a separate Go module — franz-go + pgx consumer. Dedup guard (`processed_events`) and effect (`ledger_entries` + `accounts` balance) in one transaction; offset committed only after the DB tx. Dockerfile + a `payments-consumer` compose service. One idempotency test (skips without `CRASHPOINT_TEST_DSN`). `go vet` and build clean; integration test not yet run (no Docker in this env).
+**Surprise / learned:** The safe rebalance behavior falls straight out of two franz-go options — `DisableAutoCommit` + `BlockRebalanceOnPoll`, then commit before `AllowRebalance`. No revoke callback needed: blocking the rebalance until after the commit makes it redundant.
+**Decision:** Commit the *contiguous prefix* per partition (break on first failure), never the highest success — committing past a failed offset is corpus bug 5, so the control consumer must not. Money kept as exact decimal text (`json.Number` → `::numeric`), never float.
+**Measurement:** —
+**Open question:** Should SIGTERM (`stop` fault) flush an in-flight commit before exiting, or is idempotent redelivery enough? Chose redelivery for now; revisit if duplicate reprocessing on rolling deploys shows up as noise.
+**Post idea:** "The correct Kafka consumer is four options and one transaction" — how little code the *right* at-least-once consumer needs, versus the bug corpus around it.
