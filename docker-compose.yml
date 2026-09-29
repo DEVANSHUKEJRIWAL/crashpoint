@@ -1,0 +1,87 @@
+services:
+  kafka:
+    image: apache/kafka:4.0.0
+    container_name: crashpoint-kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+
+      # Three listeners:
+      #   HOST    — host clients connect on localhost:9092 (published port)
+      #   DOCKER  — containers in this network use kafka:29092 (service name)
+      #   CONTROLLER — KRaft Raft protocol; isolated from client traffic
+      KAFKA_LISTENERS: HOST://0.0.0.0:9092,DOCKER://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: HOST://localhost:9092,DOCKER://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: HOST:PLAINTEXT,DOCKER:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: DOCKER
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      # Quorum uses the service name so the node reaches its own controller port
+      # through the Docker network, not through the published host port.
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+
+      # Single broker cannot satisfy the default RF=3 for internal topics;
+      # creation would hang indefinitely without these.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+
+      # Prevent silent auto-creation with wrong partition count on first connect.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+
+      # Stable cluster identity — survives "down -v && up -d".
+      # Regenerate with: kafka-storage.sh random-uuid
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 5s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+
+  kafka-init:
+    image: apache/kafka:4.0.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        kafka-topics.sh \
+          --bootstrap-server kafka:29092 \
+          --create --if-not-exists \
+          --topic payments.requested \
+          --partitions 6 \
+          --replication-factor 1
+
+  postgres:
+    image: postgres:17
+    container_name: crashpoint-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: crashpoint
+    # wal_level=logical must be set before the cluster is initialized; a SET in
+    # init.sql is too late.  max_replication_slots / max_wal_senders default to
+    # 10 but are set explicitly so the ceiling is visible.
+    command: >
+      postgres
+        -c wal_level=logical
+        -c max_replication_slots=4
+        -c max_wal_senders=4
+    ports:
+      - "55432:5432"
+    volumes:
+      - ./sut/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d crashpoint"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pgdata:
