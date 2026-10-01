@@ -126,3 +126,11 @@ FROM ledger_entries GROUP BY event_id HAVING count(*) > 1;
 **Measurement:** P1/P2 pending a broker run (harness: `bench/baseline/run.sh`). No numbers invented.
 **Open question:** The end-to-end "no Produce/Fetch bypasses the proxy" proof needs a real client (franz-go/Java) through a broker; in-process `kfake` is the cheapest way to get that into CI — worth doing when wiring the first trial.
 **Post idea:** "Your Kafka proxy is lying about latency" — why correlation tracking, not timestamps, is the only honest way to pair a response to its request.
+
+### 2026-09-30: End-to-end proxy test via in-process kfake (#6/#7 integration)
+
+**Goal:** Prove a real franz-go client bootstraps through the proxy and never bypasses it, in CI without Docker.
+**Done:** `internal/proxy/e2e_test.go` starts a kfake cluster, runs the proxy in front of it, and produces+consumes 20 records through it. Asserts the round-trip, that Produce/Fetch frames reached a `node-*` listener (rewrite worked, no bypass), that a node listener was created, and that the client classified as sut. Added `Server.Serve(ctx, ln, seed)` so a test can bind an ephemeral port. Green under `-race`.
+**Surprise / learned:** kfake isn't free: it hard-requires Go 1.26 and a franz-go newer than the last tag, so the tool module moved to `go 1.26.0` + franz-go v1.22.1 (kmsg v1.14). The SUT module is untouched (separate go.mod, still franz-go 1.18). Worth it — this is the only test that proves the rewrite + per-node-listener + classification stack composes under a real client; the unit tests each only prove a piece.
+**Decision:** Accept the version bump rather than hand-roll a broker: a fake broker good enough to exercise ApiVersions→Metadata→Produce→Fetch would be most of kfake anyway. CI pinned to Go 1.26.
+**Open question:** franz-go/kfake are now a step ahead of the SUT module's 1.18; keep an eye on drift when the SUT needs a client-side change.

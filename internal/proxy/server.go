@@ -87,11 +87,20 @@ func (s *Server) ListenAndServe(ctx context.Context, bootstrapAddr, seed string)
 		return err
 	}
 	if s.AdvHost == "" {
-		if host, _, e := net.SplitHostPort(bootstrapAddr); e == nil && host != "" {
+		if host, _, e := net.SplitHostPort(bootstrapAddr); e == nil && host != "" && host != "0.0.0.0" && host != "::" {
 			s.AdvHost = host
-		} else {
-			s.AdvHost = "localhost"
 		}
+	}
+	return s.Serve(ctx, ln, seed)
+}
+
+// Serve proxies connections accepted on the bootstrap listener ln to seed (and
+// to the node listeners it spawns from Metadata) until ctx is cancelled, then
+// tears every listener down and waits for in-flight connections. Callers that
+// need the bootstrap address (e.g. an ephemeral :0 port) create ln themselves.
+func (s *Server) Serve(ctx context.Context, ln net.Listener, seed string) error {
+	if s.AdvHost == "" {
+		s.AdvHost = "localhost"
 	}
 	context.AfterFunc(ctx, func() { ln.Close() })
 
