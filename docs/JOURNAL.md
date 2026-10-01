@@ -80,3 +80,13 @@ Answer in your own words (see GETTING_STARTED.md, Step 2).
 **Measurement:** —
 **Open question:** Should SIGTERM (`stop` fault) flush an in-flight commit before exiting, or is idempotent redelivery enough? Chose redelivery for now; revisit if duplicate reprocessing on rolling deploys shows up as noise.
 **Post idea:** "The correct Kafka consumer is four options and one transaction" — how little code the *right* at-least-once consumer needs, versus the bug corpus around it.
+
+### 2026-09-30: Bug modes 1-3 behind a `-mode` flag (issue #3)
+
+**Goal:** Seed the three common-footgun bugs, invisible without faults.
+**Done:** `-mode` flag (control|bug1|bug2|bug3), default from `MODE` env. bug1 = auto-commit left on + async handlers; bug2 = commit offset before the DB tx; bug3 = effect write with no dedup guard (`processNoDedup`). Happy-path smoke test for the no-dedup path (single delivery correct, redelivery duplicates). `CONSUMER_MODE` wired into compose. vet + build clean.
+**Surprise / learned:** The bugs don't live in one swappable DB function — only bug3 needed a new write. bug1 and bug2 are purely *orchestration*: commit timing and sync-vs-async in the poll loop. So the mode switch lives in main's loop, not behind a write interface. Trying to force all three into one function signature would have been the over-engineered version.
+**Decision:** Only bug3 gets a distinct DB write; bug1/bug2 reuse the idempotent `processControl` and differ solely in commit ordering. A `switch mode` in the loop beats a strategy interface with four one-method impls.
+**Measurement:** —
+**Open question:** bug1's async handlers leak on clean shutdown (no WaitGroup). Fine for a deliberately-buggy mode under trial quiescence, but confirm the explorer never mistakes shutdown-dropped writes for the seeded loss.
+**Post idea:** "Three Kafka consumer bugs, and which line moved" — same ~30 lines, three incident reports.

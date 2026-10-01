@@ -82,3 +82,31 @@ func processControl(ctx context.Context, pool *pgxpool.Pool, writerID string, p 
 	}
 	return true, tx.Commit(ctx)
 }
+
+// processNoDedup is bug3: the effect write with NO idempotency guard. Without
+// faults each event is delivered once, so the result is correct (the bug is
+// invisible). A redelivery — e.g. hold the OffsetCommit then kill — inserts a
+// SECOND ledger row and double-applies the balance, which is the duplicate the
+// checker catches as I2 / I7.
+func processNoDedup(ctx context.Context, pool *pgxpool.Pool, writerID string, p Payment) (applied bool, err error) {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err = tx.Exec(ctx, `INSERT INTO accounts (id, balance) VALUES ($1, 0) ON CONFLICT DO NOTHING`, p.AccountID); err != nil {
+		return false, fmt.Errorf("ensure account: %w", err)
+	}
+	if _, err = tx.Exec(ctx,
+		`INSERT INTO ledger_entries (account_id, event_id, seq, writer_id, amount) VALUES ($1, $2, $3, $4, $5::numeric)`,
+		p.AccountID, p.EventID, p.Seq, writerID, string(p.Amount)); err != nil {
+		return false, fmt.Errorf("insert effect: %w", err)
+	}
+	if _, err = tx.Exec(ctx,
+		`UPDATE accounts SET balance = balance + $1::numeric WHERE id = $2`,
+		string(p.Amount), p.AccountID); err != nil {
+		return false, fmt.Errorf("apply balance: %w", err)
+	}
+	return true, tx.Commit(ctx)
+}

@@ -67,3 +67,53 @@ func TestProcessControlIdempotent(t *testing.T) {
 		t.Fatalf("want balance 15.50 (10.00+5.50, each applied once), got %s", balance)
 	}
 }
+
+// Happy-path smoke for bug3: one delivery is correct (bug invisible without
+// faults); a redelivery double-writes (the bug only a redelivery exposes).
+func TestProcessNoDedup(t *testing.T) {
+	dsn := os.Getenv("CRASHPOINT_TEST_DSN")
+	if dsn == "" {
+		t.Skip("set CRASHPOINT_TEST_DSN to run (needs a Postgres with init.sql applied)")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+
+	acct := int64(998000 + os.Getpid()%1000)
+	ev := "evt-nd-" + t.Name()
+	cleanup := func() {
+		pool.Exec(ctx, `DELETE FROM ledger_entries WHERE account_id=$1`, acct)
+		pool.Exec(ctx, `DELETE FROM accounts WHERE id=$1`, acct)
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
+	p := Payment{EventID: ev, AccountID: acct, Seq: 1, Amount: json.Number("7.25")}
+
+	// Single delivery: correct.
+	if applied, err := processNoDedup(ctx, pool, "w1", p); err != nil || !applied {
+		t.Fatalf("first apply: applied=%v err=%v", applied, err)
+	}
+	var rows int
+	pool.QueryRow(ctx, `SELECT count(*) FROM ledger_entries WHERE account_id=$1`, acct).Scan(&rows)
+	if rows != 1 {
+		t.Fatalf("happy path: want 1 ledger row, got %d", rows)
+	}
+
+	// Redelivery: no guard, so it double-writes — the bug this mode seeds.
+	if _, err := processNoDedup(ctx, pool, "w1", p); err != nil {
+		t.Fatalf("redelivery: err=%v", err)
+	}
+	pool.QueryRow(ctx, `SELECT count(*) FROM ledger_entries WHERE account_id=$1`, acct).Scan(&rows)
+	if rows != 2 {
+		t.Fatalf("redelivery should duplicate (no dedup): want 2 rows, got %d", rows)
+	}
+	var balance string
+	pool.QueryRow(ctx, `SELECT balance::text FROM accounts WHERE id=$1`, acct).Scan(&balance)
+	if balance != "14.50" {
+		t.Fatalf("double-applied balance: want 14.50, got %s", balance)
+	}
+}

@@ -74,6 +74,8 @@ services:
       KAFKA_TOPIC: payments.requested
       KAFKA_GROUP: payments
       POSTGRES_DSN: postgres://crashpoint:crashpoint@postgres:5432/crashpoint
+      # control | bug1 | bug2 | bug3 — e.g. CONSUMER_MODE=bug3 docker compose up
+      MODE: ${CONSUMER_MODE:-control}
 
   postgres:
     image: postgres:17
