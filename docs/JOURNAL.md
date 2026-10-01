@@ -100,3 +100,19 @@ Answer in your own words (see GETTING_STARTED.md, Step 2).
 **Measurement:** —
 **Open question:** ProduceSync is one-at-a-time; fine at trial rates (≤ a few k/s) but if the explorer wants heavier load, switch to async `Produce` with a callback that records status. Named the ceiling in a comment.
 **Post idea:** "indeterminate is not failed" — the one status split that decides whether a fuzzer lies about loss.
+
+### 2026-09-30: Reproduce a duplicate by hand (issue #11) — POST #1
+
+**Goal:** Prove the premise: crash the no-dedup consumer in the effect→commit window and watch a duplicate ledger row appear.
+**Done:** Added a `WINDOW_DELAY` knob to the consumer (sleeps between the durable effect and the offset commit; default 0 = the real window, untouched in trials) and `scripts/manual-duplicate.sh`, which produces a batch, starts bug3, `kill -9`s it the moment effects become durable (i.e. inside the window), restarts to reprocess the redelivered-but-uncommitted batch, and checks for duplicate `event_id`s — looping until one appears or the stop condition trips.
+**Not yet run here:** the Docker daemon wasn't available in this session, so the measured numbers below are blank until the script is run on a machine with the env up (`bash scripts/manual-duplicate.sh`). No numbers invented.
+**Mechanism (why the duplicate happens):** bug3 writes `ledger_entries` (tx commits) and only then commits the Kafka offset. Kill in between → the offset never advances → Kafka redelivers on restart → with no `processed_events` guard, a second row is inserted for the same `event_id`.
+**Proving SQL:**
+```sql
+SELECT event_id, count(*) AS n, array_agg(id ORDER BY id) AS ledger_ids
+FROM ledger_entries GROUP BY event_id HAVING count(*) > 1;
+```
+**Measurement:** attempts to first duplicate = _TBD_; window width (`WINDOW`) = _TBD_. Run first with a widened `WINDOW` to confirm the mechanism, then with `WINDOW=0s` to feel how hard the real (sub-millisecond) window is by hand — that difficulty is the whole argument for the tool.
+**Surprise / learned:** Hitting the window reliably needed a timing signal, not a stopwatch. The script kills the instant the ledger row count grows (effects durable) rather than after a fixed sleep — the deterministic version of what a human does by eye, and the honest way to show the by-hand version is near-impossible once `WINDOW=0`.
+**Open question:** If `WINDOW=0s` never reproduces within `MAX_ATTEMPTS`, that's the STOP CONDITION (RISKS.md §5): the precise-placement nemesis is the point, so confirm the automated proxy-timed window hits it before trusting detection rates.
+**Post idea:** "I charged a test customer twice on purpose" — the kill-in-the-window experiment, with the attempt count as the punchline.

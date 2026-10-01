@@ -82,6 +82,16 @@ func main() {
 	group := getenv("KAFKA_GROUP", "payments")
 	dsn := getenv("POSTGRES_DSN", "postgres://crashpoint:crashpoint@localhost:55432/crashpoint")
 
+	// Manual-experiment knob (issue #11). Sleeps between the durable effect and
+	// the offset commit so a hand `kill -9` can land in the crash window; the
+	// delay IS the measured window width. Default 0 = the real (sub-millisecond)
+	// window, untouched in trials.
+	windowDelay, err := time.ParseDuration(getenv("WINDOW_DELAY", "0"))
+	if err != nil {
+		log.Error("bad WINDOW_DELAY", "err", err)
+		os.Exit(2)
+	}
+
 	// Cancelled on SIGINT/SIGTERM. SIGTERM models the `stop` fault (rolling
 	// deploy): the in-flight batch's tx fails cleanly and idempotent redelivery
 	// makes the restart safe. SIGKILL (the `kill` fault) has no graceful path —
@@ -186,6 +196,9 @@ func main() {
 				}
 			})
 			if len(toCommit) > 0 {
+				if windowDelay > 0 {
+					time.Sleep(windowDelay) // effect is durable, offset is not — the crash window
+				}
 				if err := cl.CommitRecords(ctx, toCommit...); err != nil && !errors.Is(err, context.Canceled) {
 					log.Error("commit offsets", "err", err)
 				}
