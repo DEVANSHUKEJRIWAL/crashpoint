@@ -2,10 +2,12 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 )
 
 // Server is the transparent proxy. A client connects to the bootstrap listener;
@@ -25,10 +27,13 @@ type Server struct {
 	// Classifier tags each accepted connection sut/harness. Defaults to
 	// PrefixClassifier(DefaultHarnessPrefix).
 	Classifier Classifier
+	// Recorder receives a Record per frame. nil = recording off (benchmarks).
+	Recorder *Recorder
 
-	mu    sync.Mutex
-	nodes map[int32]*nodeListener
-	wg    sync.WaitGroup
+	mu     sync.Mutex
+	nodes  map[int32]*nodeListener
+	wg     sync.WaitGroup
+	connNo atomic.Uint64
 }
 
 type nodeListener struct {
@@ -68,7 +73,7 @@ func (s *Server) ensureNode(nodeID int32, host string, port int32) (string, int3
 	}
 	s.nodes[nodeID] = n
 	s.wg.Add(1)
-	go s.accept(n.ln, n.realAddr)
+	go s.accept(n.ln, n.realAddr, fmt.Sprintf("node-%d", nodeID))
 	s.log().Info("node listener up", "node", nodeID, "proxy_port", n.port, "broker", real)
 	return s.AdvHost, n.port
 }
@@ -91,7 +96,7 @@ func (s *Server) ListenAndServe(ctx context.Context, bootstrapAddr, seed string)
 	context.AfterFunc(ctx, func() { ln.Close() })
 
 	s.wg.Add(1)
-	go func() { defer s.wg.Done(); s.serve(ln, seed) }()
+	go func() { defer s.wg.Done(); s.serve(ln, seed, "bootstrap") }()
 
 	<-ctx.Done()
 	s.closeNodes()
@@ -100,12 +105,12 @@ func (s *Server) ListenAndServe(ctx context.Context, bootstrapAddr, seed string)
 }
 
 // accept runs one listener's accept loop, proxying each client to dialAddr.
-func (s *Server) accept(ln net.Listener, dialAddr string) {
+func (s *Server) accept(ln net.Listener, dialAddr, listener string) {
 	defer s.wg.Done()
-	s.serve(ln, dialAddr)
+	s.serve(ln, dialAddr, listener)
 }
 
-func (s *Server) serve(ln net.Listener, dialAddr string) {
+func (s *Server) serve(ln net.Listener, dialAddr, listener string) {
 	for {
 		client, err := ln.Accept()
 		if err != nil {
@@ -114,12 +119,12 @@ func (s *Server) serve(ln net.Listener, dialAddr string) {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			s.handle(client, dialAddr)
+			s.handle(client, dialAddr, listener)
 		}()
 	}
 }
 
-func (s *Server) handle(client net.Conn, dialAddr string) {
+func (s *Server) handle(client net.Conn, dialAddr, listener string) {
 	broker, err := net.Dial("tcp", dialAddr)
 	if err != nil {
 		s.log().Error("dial broker", "addr", dialAddr, "err", err)
@@ -130,12 +135,15 @@ func (s *Server) handle(client net.Conn, dialAddr string) {
 	if classify == nil {
 		classify = PrefixClassifier(DefaultHarnessPrefix)
 	}
+	connID := strconv.FormatUint(s.connNo.Add(1), 10)
 	// Each Conn rewrites the address-bearing responses it carries, so a Metadata
-	// request answered by any node still hands the client proxy addresses, and
-	// tags itself sut/harness so faults never touch harness traffic.
+	// request answered by any node still hands the client proxy addresses; tags
+	// itself sut/harness so faults never touch harness traffic; and records a
+	// frame event per frame when a Recorder is set.
 	NewConn(client, broker, s.MaxFrame,
 		WithRewriter(s.ensureNode),
 		WithClassifier(classify),
+		WithRecorder(s.Recorder, connID, listener),
 	).Run(context.Background())
 }
 

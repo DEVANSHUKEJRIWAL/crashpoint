@@ -5,15 +5,19 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/DEVANSHUKEJRIWAL/crashpoint/internal/protocol"
+	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
-// apiVersion is what a response needs but its header lacks: the api key and
-// version of the request it answers.
-type apiVersion struct {
+// inflight is what a response needs but its header lacks: the api key and
+// version of the request it answers, plus when that request was forwarded (for
+// response latency).
+type inflight struct {
 	Key     int16
 	Version int16
+	sentAt  time.Time
 }
 
 // correlations maps a connection's in-flight correlation ids to the request
@@ -21,18 +25,18 @@ type apiVersion struct {
 // response takes it. One map per connection (ARCHITECTURE §5).
 type correlations struct {
 	mu sync.Mutex
-	m  map[int32]apiVersion
+	m  map[int32]inflight
 }
 
-func newCorrelations() *correlations { return &correlations{m: map[int32]apiVersion{}} }
+func newCorrelations() *correlations { return &correlations{m: map[int32]inflight{}} }
 
-func (c *correlations) register(corr int32, av apiVersion) {
+func (c *correlations) register(corr int32, av inflight) {
 	c.mu.Lock()
 	c.m[corr] = av
 	c.mu.Unlock()
 }
 
-func (c *correlations) take(corr int32) (apiVersion, bool) {
+func (c *correlations) take(corr int32) (inflight, bool) {
 	c.mu.Lock()
 	av, ok := c.m[corr]
 	delete(c.m, corr)
@@ -57,6 +61,10 @@ type Conn struct {
 	rewrite        AddrRewriter // nil = forward responses unchanged
 	classify       Classifier   // nil = never classify (stays unknown)
 	class          atomic.Int32 // Class; set once from the first request's client id
+
+	rec      *Recorder // nil = recording off
+	connID   string
+	listener string
 }
 
 // ConnOption configures a Conn. The hooks accrete (rewriter, classifier, faults
@@ -69,6 +77,12 @@ func WithRewriter(rw AddrRewriter) ConnOption { return func(c *Conn) { c.rewrite
 
 // WithClassifier makes the Conn tag itself sut/harness from its first request.
 func WithClassifier(cl Classifier) ConnOption { return func(c *Conn) { c.classify = cl } }
+
+// WithRecorder makes the Conn emit a Record per frame to rec, tagged with this
+// connection's id and listener label. A nil rec keeps recording off.
+func WithRecorder(rec *Recorder, connID, listener string) ConnOption {
+	return func(c *Conn) { c.rec, c.connID, c.listener = rec, connID, listener }
+}
 
 func NewConn(client, broker net.Conn, maxFrame int, opts ...ConnOption) *Conn {
 	if maxFrame <= 0 {
@@ -120,13 +134,25 @@ func (c *Conn) pumpRequests() error {
 			return err
 		}
 		if h, perr := protocol.ParseRequestHeader(frame); perr == nil {
+			now := time.Now()
 			// Classify once, from the first request's client id (the earliest
 			// point the id is on the wire). Faults consult this before acting.
 			if c.classify != nil && c.Class() == ClassUnknown {
 				c.class.Store(int32(c.classify(h.ClientID)))
 			}
+			c.rec.Emit(Record{
+				TimeUnixNano: now.UnixNano(),
+				Conn:         c.connID,
+				Listener:     c.listener,
+				Dir:          "req",
+				API:          h.APIKey,
+				APIName:      kmsg.NameForKey(h.APIKey),
+				Version:      h.APIVersion,
+				Correlation:  h.CorrelationID,
+				Size:         len(frame),
+			})
 			if expectsResponse(frame, h) {
-				c.corr.register(h.CorrelationID, apiVersion{h.APIKey, h.APIVersion})
+				c.corr.register(h.CorrelationID, inflight{h.APIKey, h.APIVersion, now})
 			}
 		}
 		if err := WriteFrame(c.broker, frame); err != nil {
@@ -144,15 +170,37 @@ func (c *Conn) pumpResponses() error {
 		if err != nil {
 			return err
 		}
-		if corr, ok := protocol.ResponseCorrelationID(frame); ok {
-			if av, found := c.corr.take(corr); found && c.rewrite != nil {
+		origSize := len(frame)
+		corr, ok := protocol.ResponseCorrelationID(frame)
+		var inf inflight
+		var found bool
+		if ok {
+			inf, found = c.corr.take(corr)
+			if found && c.rewrite != nil {
 				// Rewrite broker addresses so the client never learns a real one.
 				// On a decode error, forward the original rather than drop the
 				// response; the no-bypass integration test catches a leak.
-				if out, err := RewriteResponse(frame, av.Key, av.Version, c.rewrite); err == nil {
+				if out, err := RewriteResponse(frame, inf.Key, inf.Version, c.rewrite); err == nil {
 					frame = out
 				}
 			}
+		}
+		if c.rec != nil {
+			r := Record{
+				TimeUnixNano: time.Now().UnixNano(),
+				Conn:         c.connID,
+				Listener:     c.listener,
+				Dir:          "resp",
+				Correlation:  corr,
+				Size:         origSize,
+			}
+			if found {
+				r.API = inf.Key
+				r.APIName = kmsg.NameForKey(inf.Key)
+				r.Version = inf.Version
+				r.LatencyMicros = time.Since(inf.sentAt).Microseconds()
+			}
+			c.rec.Emit(r)
 		}
 		if err := WriteFrame(c.client, frame); err != nil {
 			return err
