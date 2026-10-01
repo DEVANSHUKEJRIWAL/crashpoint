@@ -76,7 +76,10 @@ func (r *reader) nullableString() string {
 }
 
 func (r *reader) skip(n int) {
-	if r.err != nil || n < 0 || r.i+n > len(r.b) {
+	// Compare against remaining bytes rather than r.i+n: a hostile compact
+	// length (e.g. a tag size near maxint) would overflow r.i+n and slip past
+	// the guard. len(r.b)-r.i is always a small non-negative int.
+	if r.err != nil || n < 0 || n > len(r.b)-r.i {
 		r.fail()
 		return
 	}
