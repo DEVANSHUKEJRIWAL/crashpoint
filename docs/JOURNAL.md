@@ -90,3 +90,13 @@ Answer in your own words (see GETTING_STARTED.md, Step 2).
 **Measurement:** —
 **Open question:** bug1's async handlers leak on clean shutdown (no WaitGroup). Fine for a deliberately-buggy mode under trial quiescence, but confirm the explorer never mistakes shutdown-dropped writes for the seeded loss.
 **Post idea:** "Three Kafka consumer bugs, and which line moved" — same ~30 lines, three incident reports.
+
+### 2026-09-30: Workload producer with tri-state status (issue #4)
+
+**Goal:** Generate unique, per-key-ordered inputs and record each one's delivery status.
+**Done:** Created the tool module (`go.mod` at root) with `internal/workload` (seeded `Generator`, `PayloadEncoder` interface, `JSONEncoder`) and `cmd/workload`. ProduceSync per record with a per-produce timeout; classifies acknowledged/failed/**indeterminate** and writes JSONL. Tests cover per-key seq + unique ids and the amount-as-number contract. vet/build/test green.
+**Surprise / learned:** The amount bites across the module boundary. The consumer's `Amount json.Number` only decodes a bare JSON number token, so the producer has to marshal amount through `json.Number` too — a string `"10.00"` would fail decode. Caught it with a cross-module contract test rather than at runtime. Floats would have "worked" and silently drifted.
+**Decision:** Timeout → indeterminate, never failed (the record may have landed); the checker excludes indeterminate from loss checks but keeps it for duplicates. `Input` stays a struct — the `Input` interface the design mentions is a checker-side concern worth deferring until observed mode (v2) is a real second producer; only `PayloadEncoder` is an interface now, because Avro/Protobuf are the concrete second cases.
+**Measurement:** —
+**Open question:** ProduceSync is one-at-a-time; fine at trial rates (≤ a few k/s) but if the explorer wants heavier load, switch to async `Produce` with a callback that records status. Named the ceiling in a comment.
+**Post idea:** "indeterminate is not failed" — the one status split that decides whether a fuzzer lies about loss.
