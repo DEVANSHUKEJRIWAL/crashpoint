@@ -10,6 +10,11 @@ Benchmarks are defined **before** implementation, so results can't be cherry-pic
 
 Fill this in before the first measurement. Any change to it starts a new results table.
 
+> **Harness ready (issue #10):** `bench/baseline/run.sh` drives the open-loop
+> generator (`cmd/bench`) through `cmd/crashpoint proxy` for the three P1/P2
+> conditions (direct, proxy recording off, proxy recording on). Fill this table
+> and the P1/P2 **Measured** column from a run on the target machine.
+
 | Item | Value |
 |---|---|
 | Machine / CPU / cores | |
