@@ -33,7 +33,7 @@ func TestConnForwardsAndTracksCorrelation(t *testing.T) {
 	defer clientEnd.Close()
 	defer brokerEnd.Close()
 
-	c := NewConn(proxyClient, proxyBroker, 0, nil)
+	c := NewConn(proxyClient, proxyBroker, 0)
 	go c.Run(context.Background())
 
 	deadline := time.Now().Add(5 * time.Second)
@@ -74,7 +74,7 @@ func TestConnSkipsAcks0Produce(t *testing.T) {
 	defer clientEnd.Close()
 	defer brokerEnd.Close()
 
-	c := NewConn(proxyClient, proxyBroker, 0, nil)
+	c := NewConn(proxyClient, proxyBroker, 0)
 	go c.Run(context.Background())
 	brokerEnd.SetDeadline(time.Now().Add(5 * time.Second))
 

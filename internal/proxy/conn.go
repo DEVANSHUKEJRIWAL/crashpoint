@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"sync"
+	"sync/atomic"
 
 	"github.com/DEVANSHUKEJRIWAL/crashpoint/internal/protocol"
 )
@@ -54,14 +55,39 @@ type Conn struct {
 	max            int
 	corr           *correlations
 	rewrite        AddrRewriter // nil = forward responses unchanged
+	classify       Classifier   // nil = never classify (stays unknown)
+	class          atomic.Int32 // Class; set once from the first request's client id
 }
 
-func NewConn(client, broker net.Conn, maxFrame int, rewrite AddrRewriter) *Conn {
+// ConnOption configures a Conn. The hooks accrete (rewriter, classifier, faults
+// later), so options keep the constructor stable.
+type ConnOption func(*Conn)
+
+// WithRewriter makes the Conn rewrite broker addresses in the responses it
+// carries.
+func WithRewriter(rw AddrRewriter) ConnOption { return func(c *Conn) { c.rewrite = rw } }
+
+// WithClassifier makes the Conn tag itself sut/harness from its first request.
+func WithClassifier(cl Classifier) ConnOption { return func(c *Conn) { c.classify = cl } }
+
+func NewConn(client, broker net.Conn, maxFrame int, opts ...ConnOption) *Conn {
 	if maxFrame <= 0 {
 		maxFrame = DefaultMaxFrameBytes
 	}
-	return &Conn{client: client, broker: broker, max: maxFrame, corr: newCorrelations(), rewrite: rewrite}
+	c := &Conn{client: client, broker: broker, max: maxFrame, corr: newCorrelations()}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
 }
+
+// Class returns the connection's classification (ClassUnknown until its first
+// request arrives).
+func (c *Conn) Class() Class { return Class(c.class.Load()) }
+
+// Faultable reports whether the nemesis may target this connection. Only the
+// SUT is faultable; an unknown or harness connection never is.
+func (c *Conn) Faultable() bool { return c.Class() == ClassSUT }
 
 // Run pumps both directions until either side closes or errors, then closes
 // both connections so the other goroutine unblocks. It returns the first error
@@ -93,8 +119,15 @@ func (c *Conn) pumpRequests() error {
 		if err != nil {
 			return err
 		}
-		if h, perr := protocol.ParseRequestHeader(frame); perr == nil && expectsResponse(frame, h) {
-			c.corr.register(h.CorrelationID, apiVersion{h.APIKey, h.APIVersion})
+		if h, perr := protocol.ParseRequestHeader(frame); perr == nil {
+			// Classify once, from the first request's client id (the earliest
+			// point the id is on the wire). Faults consult this before acting.
+			if c.classify != nil && c.Class() == ClassUnknown {
+				c.class.Store(int32(c.classify(h.ClientID)))
+			}
+			if expectsResponse(frame, h) {
+				c.corr.register(h.CorrelationID, apiVersion{h.APIKey, h.APIVersion})
+			}
 		}
 		if err := WriteFrame(c.broker, frame); err != nil {
 			return err

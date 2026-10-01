@@ -22,6 +22,9 @@ type Server struct {
 	AdvHost  string
 	MaxFrame int
 	Log      *slog.Logger
+	// Classifier tags each accepted connection sut/harness. Defaults to
+	// PrefixClassifier(DefaultHarnessPrefix).
+	Classifier Classifier
 
 	mu    sync.Mutex
 	nodes map[int32]*nodeListener
@@ -123,9 +126,17 @@ func (s *Server) handle(client net.Conn, dialAddr string) {
 		client.Close()
 		return
 	}
+	classify := s.Classifier
+	if classify == nil {
+		classify = PrefixClassifier(DefaultHarnessPrefix)
+	}
 	// Each Conn rewrites the address-bearing responses it carries, so a Metadata
-	// request answered by any node still hands the client proxy addresses.
-	NewConn(client, broker, s.MaxFrame, s.ensureNode).Run(context.Background())
+	// request answered by any node still hands the client proxy addresses, and
+	// tags itself sut/harness so faults never touch harness traffic.
+	NewConn(client, broker, s.MaxFrame,
+		WithRewriter(s.ensureNode),
+		WithClassifier(classify),
+	).Run(context.Background())
 }
 
 func (s *Server) closeNodes() {
