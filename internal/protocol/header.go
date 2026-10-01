@@ -93,6 +93,22 @@ func ResponseCorrelationID(frame []byte) (int32, bool) {
 	return int32(binary.BigEndian.Uint32(frame)), true
 }
 
+// SplitResponse separates a response frame (length prefix already stripped)
+// into its header bytes and its body. kmsg decodes from the body, so the proxy
+// keeps the header — correlation id, plus tagged fields on a flexible response —
+// verbatim and re-attaches it after rewriting the body.
+func SplitResponse(frame []byte, apiKey, apiVersion int16) (header, body []byte, err error) {
+	r := &reader{b: frame}
+	r.int32() // correlation id
+	if ResponseHeaderVersion(apiKey, apiVersion) >= 1 {
+		r.skipTags()
+	}
+	if r.err != nil {
+		return nil, nil, r.err
+	}
+	return frame[:r.i], frame[r.i:], nil
+}
+
 // ProduceAcks reads the acks field from a Produce request body (the bytes after
 // the request header). acks == 0 means the broker sends no response, so the
 // proxy must not register a correlation id for that request.

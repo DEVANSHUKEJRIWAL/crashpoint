@@ -53,13 +53,14 @@ type Conn struct {
 	client, broker net.Conn
 	max            int
 	corr           *correlations
+	rewrite        AddrRewriter // nil = forward responses unchanged
 }
 
-func NewConn(client, broker net.Conn, maxFrame int) *Conn {
+func NewConn(client, broker net.Conn, maxFrame int, rewrite AddrRewriter) *Conn {
 	if maxFrame <= 0 {
 		maxFrame = DefaultMaxFrameBytes
 	}
-	return &Conn{client: client, broker: broker, max: maxFrame, corr: newCorrelations()}
+	return &Conn{client: client, broker: broker, max: maxFrame, corr: newCorrelations(), rewrite: rewrite}
 }
 
 // Run pumps both directions until either side closes or errors, then closes
@@ -111,7 +112,14 @@ func (c *Conn) pumpResponses() error {
 			return err
 		}
 		if corr, ok := protocol.ResponseCorrelationID(frame); ok {
-			c.corr.take(corr)
+			if av, found := c.corr.take(corr); found && c.rewrite != nil {
+				// Rewrite broker addresses so the client never learns a real one.
+				// On a decode error, forward the original rather than drop the
+				// response; the no-bypass integration test catches a leak.
+				if out, err := RewriteResponse(frame, av.Key, av.Version, c.rewrite); err == nil {
+					frame = out
+				}
+			}
 		}
 		if err := WriteFrame(c.client, frame); err != nil {
 			return err
